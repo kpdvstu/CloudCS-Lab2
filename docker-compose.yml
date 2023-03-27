@@ -1,0 +1,44 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:15.2
+    environment:
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 10s
+      retries: 120
+    ports:
+      - "8888:5432"
+  keycloak:
+    image: kpdvstu/cloud-cs:keycloak
+    build:
+      context: ./keycloak/docker
+      dockerfile: Dockerfile
+    environment:
+      KEYCLOAK_ADMIN: "admin"
+      KEYCLOAK_ADMIN_PASSWORD: $KEYCLOAK_ADMIN_PASSWORD
+    command: start --optimized --db-password=$POSTGRES_PASSWORD
+    ports:
+      - "8443:8443"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  inference:
+    image: kpdvstu/cloud-cs:inference-service
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      MODEL_PATH: "/models/pipeline.pkl"
+      KEYCLOAK_URL: $KEYCLOAK_URL
+      CLIENT_ID: $CLIENT_ID
+      CLIENT_SECRET: $CLIENT_SECRET
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/models
